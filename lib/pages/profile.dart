@@ -23,7 +23,7 @@ class ProfilePage extends StatelessWidget
           // Gambar Profil dari URL
           CircleAvatar(
             radius: 50,
-            backgroundImage: NetworkImage('https://i.imgur.com/F9Nf9Fx.jpeg'),
+            backgroundImage: AssetImage('assets/img/profile_img.jpeg'),
           ),
           const SizedBox(height: 10),
           // Nama Profil
