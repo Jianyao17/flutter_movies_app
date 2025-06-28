@@ -6,6 +6,9 @@ const db = JSON.parse(fs.readFileSync("./database.json", "utf-8"));
 // Kita inisialisasi dengan beberapa film agar tidak kosong.
 const bookmarkedMovieIds = new Set([12, 13, 14, 15, 16, 17]);
 
+// Untuk menyimpan daftar film yang sudah dibeli di memori server
+const purchasedMovieIds = new Set();
+
 const routes = [
   {
     method: "GET",
@@ -18,12 +21,16 @@ const routes = [
         endpoints: 
         {
           all_movies: "/movies",
-          popular_movies: "/movies/popular",
           new_movies: "/movies/new",
-          bookmarked_movies: "/movies/bookmarked",
+          popular_movies: "/movies/popular",
           movie_by_id: "/movies/{id}",
+
+          bookmarked_movies: "/movies/bookmarked",
           add_bookmark: "POST /movies/{id}/bookmark",
           remove_bookmark: "DELETE /movies/{id}/bookmark",
+          
+          purchased_movies: "/movies/purchased",
+          purchase_movie: "POST /movies/{id}/purchase",
         },
       };
     },
@@ -33,7 +40,15 @@ const routes = [
   {
     method: "GET",
     path: "/movies",
-    handler: (request, h) => h.response(db.movies),
+    handler: (request, h) => 
+    {
+      const movies = db.movies
+        .map((movie) => ({...movie,
+          isBookmarked: bookmarkedMovieIds.has(movie.id),
+          isPurchased: purchasedMovieIds.has(movie.id),
+        }));
+      return h.response(movies);
+    },
   },
 
   // Endpoint untuk mendapatkan film baru
@@ -43,8 +58,11 @@ const routes = [
     handler: (request, h) => 
     {
       const newMovies = db.movies
-        .filter((movie) => db.newMovieIds.includes(movie.id));
-      
+        .filter((movie) => db.newMovieIds.includes(movie.id))
+        .map((movie) => ({...movie,
+          isBookmarked: bookmarkedMovieIds.has(movie.id),
+          isPurchased: purchasedMovieIds.has(movie.id),
+        }));
       return h.response(newMovies);
     },
   },
@@ -56,8 +74,11 @@ const routes = [
     handler: (request, h) => 
     {
       const popularMovies = db.movies
-        .filter((movie) => db.popularMovieIds.includes(movie.id));
-
+        .filter((movie) => db.popularMovieIds.includes(movie.id))
+        .map((movie) => ({...movie,
+          isBookmarked: bookmarkedMovieIds.has(movie.id),
+          isPurchased: purchasedMovieIds.has(movie.id),
+        }));
       return h.response(popularMovies);
     },
   },
@@ -69,9 +90,28 @@ const routes = [
     handler: (request, h) => 
     {
       const bookmarkedMovies = db.movies
-        .filter((movie) => bookmarkedMovieIds.has(movie.id));
-
+        .filter((movie) => bookmarkedMovieIds.has(movie.id))
+        .map((movie) => ({...movie,
+          isBookmarked: true,
+          isPurchased: purchasedMovieIds.has(movie.id),
+        }));
       return h.response(bookmarkedMovies);
+    },
+  },
+
+  // Endpoint untuk mendapatkan film yang sudah dibeli
+  {
+    method: "GET",
+    path: "/movies/purchased",
+    handler: (request, h) => 
+    {
+      const purchasedMovies = db.movies
+        .filter((movie) => purchasedMovieIds.has(movie.id))
+        .map((movie) => ({...movie,
+          isBookmarked: bookmarkedMovieIds.has(movie.id),
+          isPurchased: true,
+        }));
+      return h.response(purchasedMovies);
     },
   },
 
@@ -85,8 +125,12 @@ const routes = [
       const movie = db.movies.find((m) => m.id === id);
 
       if (movie) 
-      { return h.response(movie); }
-
+      {
+        return h.response({...movie,
+          isBookmarked: bookmarkedMovieIds.has(movie.id),
+          isPurchased: purchasedMovieIds.has(movie.id),
+        });
+      }
       return h.response({ message: "Movie not found" }).code(404);
     },
   },
@@ -139,6 +183,38 @@ const routes = [
       return h
         .response({ message: "Movie was not bookmarked or does not exist." })
         .code(404);
+    },
+  },
+
+  // Endpoint untuk membeli film
+  {
+    method: "POST",
+    path: "/movies/{id}/purchase",
+    handler: (request, h) => 
+    {
+      const id = parseInt(request.params.id, 10);
+      const movieExists = db.movies.some((m) => m.id === id);
+
+      if (!movieExists) 
+      {
+        return h
+          .response({ message: "Movie not found" })
+          .code(404);
+      }
+      if (purchasedMovieIds.has(id)) 
+      {
+        return h
+          .response({ message: `Movie with id ${id} has already been purchased.` })
+          .code(200);
+      }
+
+      purchasedMovieIds.add(id);
+      return h
+        .response({
+          message: `Movie with id ${id} has been purchased successfully!`,
+          purchasedIds: [...purchasedMovieIds],
+        })
+        .code(200);
     },
   },
 ];
